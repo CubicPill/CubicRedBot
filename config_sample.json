@@ -1,0 +1,8 @@
+{
+  "db_path": "./cubicredbot.db",
+  "bot_token": "",
+  "debug_level": 30,
+  "ban_id": [
+    44785003
+  ]
+}
