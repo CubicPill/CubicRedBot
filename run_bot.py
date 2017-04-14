@@ -51,7 +51,7 @@ def update_trigger_list(chat_id=None):
 def add(bot, update):
     try:
         content = update.message.text.split(' ', 1)[1].split('@', 1)
-        triggers = content[0].split('|')
+        triggers = content[0].lower().split('|')
         texts = content[1].split('|')
     except IndexError:
         update.message.reply_text('没东西 add 个大头鬼啦')
@@ -79,7 +79,7 @@ def add(bot, update):
 def delete(bot, update):
     try:
         content = update.message.text.split(' ', 1)[1].split('@', 1)
-        triggers = content[0].split('|')
+        triggers = content[0].lower().split('|')
         texts = content[1].split('|')
     except IndexError:
         return
@@ -92,7 +92,7 @@ def list_text(bot, update):
     if update.message.date < INIT_TIMESTAMP:
         return
     try:
-        trigger = update.message.text.split(' ', 1)[1]
+        trigger = update.message.text.split(' ', 1)[1].lower()
     except IndexError:
         return
 
@@ -109,8 +109,8 @@ def merge(bot, update):
         return
     try:
         content = update.message.text.split(' ', 1)[1].split('=>')
-        trigger_from = content[0]
-        trigger_to = content[1]
+        trigger_from = content[0].lower()
+        trigger_to = content[1].lower()
     except IndexError:
         update.message.reply_text('Missing arguments!')
         return
@@ -123,7 +123,7 @@ def clear(bot, update):
         update.message.reply_text('Admin only')
         return
     try:
-        trigger = update.message.text.split(' ', 1)[1]
+        trigger = update.message.text.split(' ', 1)[1].lower()
     except IndexError:
         return
     db.clear_trigger(trigger, update.message.chat_id)
@@ -140,7 +140,7 @@ def process_trigger(bot, update):
         matched_triggers = []
 
         for trigger in TRIGGERS.get(update.message.chat_id):
-            if trigger in update.message.text:
+            if trigger in update.message.text.lower():
                 matched_triggers.append(trigger)
         if matched_triggers:
             update.message.reply_text(
@@ -171,9 +171,10 @@ def process_chat_message(bot, update):
 def show_all_triggers(bot, update):
     if update.message.date < INIT_TIMESTAMP:
         return
-    if update.message.from_user.id not in get_group_admin_ids(bot, update.message.chat_id):
-        update.message.reply_text('Admin only')
-        return
+    if update.message.from_user.id != update.message.chat_id:  # not in private chat
+        if update.message.from_user.id not in get_group_admin_ids(bot, update.message.chat_id):
+            update.message.reply_text('Admin only')
+            return
     if update.message.chat_id in TRIGGERS.keys():
         update.message.reply_text(
             text='Triggers in chat %s:\n%s' % (update.message.chat_id, '\n'.join(TRIGGERS[update.message.chat_id])),
@@ -280,8 +281,9 @@ def main():
     global BAN_IDS
     BAN_IDS = config['ban_id']
     db.__init__(config['db_path'])
-    if sys.argv.get(1) == '--setup':
-        db.setup()
+    if len(sys.argv) >= 2:
+        if sys.argv[1] == '--setup':
+            db.setup()
     logging.basicConfig(level=config['debug_level'])
     update_trigger_list()
 
