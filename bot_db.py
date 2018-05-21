@@ -161,7 +161,7 @@ def search_text(keywords, chat_id, limit=5):
         cursor = connection.execute(
             'SELECT userinfo.first_name,userinfo.last_name,chats.time,chats.text FROM chats '
             'LEFT JOIN userinfo ON chats.user_id=userinfo.user_id AND chats.chat_id=userinfo.chat_id '
-            'WHERE chats.update_id=? AND chats.chat_id=? ORDER BY chats.time', (uid, chat_id))
+            'WHERE chats.update_id=? AND chats.chat_id=? ORDER BY chats.time DESC', (uid, chat_id))
         result.extend(cursor.fetchall())
         if len(result) >= limit:
             break
