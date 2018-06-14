@@ -162,7 +162,7 @@ def process_chat_message(bot, update):
                            chat_id=update.message.chat_id,
                            user_id=update.message.from_user.id, time=update.message.date)
 
-        if update.message.new_chat_member:  # entering group trigger
+        if update.message.new_chat_members:  # entering group trigger
             update.message.reply_text('新人请发红包,支付宝QQ微信都可以')
         if update.message.left_chat_member:  # left group trigger
             update.message.reply_text('@%s 跑了!' % update.message.left_chat_member.username)
