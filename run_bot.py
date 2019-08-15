@@ -1,10 +1,12 @@
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-import bot_db as db
-import random
-import logging
 import datetime
 import json
+import logging
+import random
 import sys
+
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+
+import bot_db as db
 
 TRIGGERS = {}
 BAN_IDS = []
@@ -148,7 +150,8 @@ def process_trigger(bot, update):
 
 
 def process_chat_message(bot, update):
-    if update.edited_message and not update.edited_message.text.startswith('/'):  # process edited message
+    if update.edited_message and update.edited_message.text and not update.edited_message.text.startswith(
+            '/'):  # process edited message
         db.log_message(message_id=update.edited_message.message_id, text=update.edited_message.text,
                        chat_id=update.edited_message.chat_id,
                        user_id=update.edited_message.from_user.id, time=update.edited_message.edit_date, edited=True)
@@ -254,8 +257,24 @@ def stats(bot, update):
     else:
         lines = []
         for user in result:
-            lines.append('%s %s (%d) => %d' % user)
-        update.message.reply_text('\n'.join(lines), quote=False)
+            fn, ln, uid, count = user
+            full_name = '{} {}'.format(fn, ln) if ln else fn
+            lines.append('%s (%d) => %d' % (full_name, uid, count))
+        content = '\n'.join(lines)
+
+        if len(content) <= 4000:
+            update.message.reply_text(content, quote=False)
+        else:  # message too long, need to split
+            i = 0
+            it = 0
+            while i < len(content):
+                it += 1
+                if it >= 20: break
+                for j in range(min(4000, len(content) - i - 1), 0, -1):
+                    if content[i + j] == '\n' or i + j == len(content) - 1:
+                        update.message.reply_text(content[i:i + j + 1], quote=False)
+                        i = i + j + 1
+                        break
 
 
 def echo(bot, update):
@@ -267,6 +286,10 @@ def echo(bot, update):
         update.message.reply_text(update.message.text.split(' ', 1)[1])
     except IndexError:
         pass
+
+
+def gamble(bot, update):
+    pass
 
 
 def main():
@@ -288,7 +311,7 @@ def main():
     update_trigger_list()
 
     updater = Updater(token=config['bot_token'])
-    updater.dispatcher.add_handler(MessageHandler(Filters.all, process_chat_message, allow_edited=True), group=-1)
+    updater.dispatcher.add_handler(MessageHandler(Filters.all, process_chat_message, edited_updates=True), group=-1)
     # text logger & counter & user info update & recent edits
 
     updater.dispatcher.add_handler(CommandHandler('add', add))
