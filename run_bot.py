@@ -4,13 +4,17 @@ import logging
 import random
 import sys
 
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+import pytz
+
+timezone = pytz.timezone('Asia/Shanghai')
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 import bot_db as db
 
 TRIGGERS = {}
 BAN_IDS = []
-INIT_TIMESTAMP = datetime.datetime.now()
+INIT_TIMESTAMP = datetime.datetime.utcnow().replace(tzinfo=timezone)
 
 '''
 Commands:
@@ -31,8 +35,8 @@ Admin only:
 '''
 
 
-def get_group_admin_ids(bot, chat_id):
-    result = bot.get_chat_administrators(chat_id)
+async def get_group_admin_ids(bot, chat_id):
+    result = await bot.get_chat_administrators(chat_id)
     return [admin.user.id for admin in result]
 
 
@@ -50,21 +54,21 @@ def update_trigger_list(chat_id=None):
             TRIGGERS[key].sort(key=lambda t: len(t), reverse=True)
 
 
-def add(bot, update):
+async def add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         content = update.message.text.split(' ', 1)[1].split('@', 1)
         triggers = content[0].lower().split('|')
         texts = content[1].split('|')
     except IndexError:
-        update.message.reply_text('没东西 add 个大头鬼啦')
+        await update.message.reply_text('没东西 add 个大头鬼啦')
         return
     for text in texts:
         if not len(text) <= 140:
-            update.message.reply_text('2<=len(trigger)<=140, len(text)<=140')
+            await update.message.reply_text('2<=len(trigger)<=140, len(text)<=140')
             return
     for trigger in triggers:
         if not 2 <= len(trigger) <= 140:
-            update.message.reply_text('2<=len(trigger)<=140, len(text)<=140')
+            await update.message.reply_text('2<=len(trigger)<=140, len(text)<=140')
             return
 
     result = db.add_trigger_text(triggers, texts, update.message.chat_id)
@@ -72,13 +76,13 @@ def add(bot, update):
         lines = []
         for item in result:
             lines.append('- %s@%s already exists' % item)
-        update.message.reply_text('Result:\n' + '\n'.join(lines))
+        await update.message.reply_text('Result:\n' + '\n'.join(lines))
 
-    update.message.reply_text('done!')
+    await update.message.reply_text('done!')
     update_trigger_list(update.message.chat_id)
 
 
-def delete(bot, update):
+async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         content = update.message.text.split(' ', 1)[1].split('@', 1)
         triggers = content[0].lower().split('|')
@@ -86,11 +90,11 @@ def delete(bot, update):
     except IndexError:
         return
     db.delete_trigger_text(triggers, texts, update.message.chat_id)
-    update.message.reply_text('deleted!')
+    await update.message.reply_text('deleted!')
     update_trigger_list(update.message.chat_id)
 
 
-def list_text(bot, update):
+async def list_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.date < INIT_TIMESTAMP:
         return
     try:
@@ -100,40 +104,40 @@ def list_text(bot, update):
 
     result = db.query_all_text_of_trigger(trigger, update.message.chat_id)
     if result:
-        update.message.reply_text('\n'.join(result))
+        await update.message.reply_text('\n'.join(result))
     else:
-        update.message.reply_text('Empty list!')
+        await update.message.reply_text('Empty list!')
 
 
-def merge(bot, update):
-    if update.message.from_user.id not in get_group_admin_ids(bot, update.message.chat_id):
-        update.message.reply_text('Admin only')
+async def merge(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.from_user.id not in get_group_admin_ids(update.get_bot(), update.message.chat_id):
+        await update.message.reply_text('Admin only')
         return
     try:
         content = update.message.text.split(' ', 1)[1].split('=>')
         trigger_from = content[0].lower()
         trigger_to = content[1].lower()
     except IndexError:
-        update.message.reply_text('Missing arguments!')
+        await update.message.reply_text('Missing arguments!')
         return
     db.merge_trigger(trigger_from, trigger_to, update.message.chat_id)
-    update.message.reply_text('merge done!')
+    await update.message.reply_text('merge done!')
 
 
-def clear(bot, update):
-    if update.message.from_user.id not in get_group_admin_ids(bot, update.message.chat_id):
-        update.message.reply_text('Admin only')
+async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.from_user.id not in get_group_admin_ids(update.get_bot(), update.message.chat_id):
+        await update.message.reply_text('Admin only')
         return
     try:
         trigger = update.message.text.split(' ', 1)[1].lower()
     except IndexError:
         return
     db.clear_trigger(trigger, update.message.chat_id)
-    update.message.reply_text('cleared!')
+    await update.message.reply_text('cleared!')
     update_trigger_list(update.message.chat_id)
 
 
-def process_trigger(bot, update):
+async def process_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.date < INIT_TIMESTAMP:
         return
     if update.message.from_user.id in BAN_IDS:
@@ -142,14 +146,14 @@ def process_trigger(bot, update):
         matched_triggers = []
 
         for trigger in TRIGGERS.get(update.message.chat_id):
-            if trigger in update.message.text.lower():
+            if trigger in await update.message.text.lower():
                 matched_triggers.append(trigger)
         if matched_triggers:
-            update.message.reply_text(
-                db.query_random_trigger_text(random.choice(matched_triggers), update.message.chat_id))
+            await update.message.reply_text(
+                    db.query_random_trigger_text(random.choice(matched_triggers), update.message.chat_id))
 
 
-def process_chat_message(bot, update):
+async def process_chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.edited_message and update.edited_message.text and not update.edited_message.text.startswith(
             '/'):  # process edited message
         db.log_message(message_id=update.edited_message.message_id, text=update.edited_message.text,
@@ -166,27 +170,27 @@ def process_chat_message(bot, update):
                            user_id=update.message.from_user.id, time=update.message.date)
 
         if update.message.new_chat_members:  # entering group trigger
-            update.message.reply_text('新人请发红包,支付宝QQ微信都可以')
+            await update.message.reply_text('新人请发红包,支付宝QQ微信都可以')
         if update.message.left_chat_member:  # left group trigger
-            update.message.reply_text('@%s 跑了!' % update.message.left_chat_member.username)
+            await update.message.reply_text('@%s 跑了!' % update.message.left_chat_member.username)
 
 
-def show_all_triggers(bot, update):
+async def show_all_triggers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.date < INIT_TIMESTAMP:
         return
     if update.message.from_user.id != update.message.chat_id:  # not in private chat
-        if update.message.from_user.id not in get_group_admin_ids(bot, update.message.chat_id):
-            update.message.reply_text('Admin only')
+        if update.message.from_user.id not in get_group_admin_ids(update.get_bot(), update.message.chat_id):
+            await update.message.reply_text('Admin only')
             return
     if update.message.chat_id in TRIGGERS.keys():
-        update.message.reply_text(
-            text='Triggers in chat %s:\n%s' % (update.message.chat_id, '\n'.join(TRIGGERS[update.message.chat_id])),
-            quote=False)
+        await update.message.reply_text(
+                text='Triggers in chat %s:\n%s' % (update.message.chat_id, '\n'.join(TRIGGERS[update.message.chat_id])),
+                quote=False)
     else:
-        update.message.reply_text('No trigger to show in this chat')
+        await update.message.reply_text('No trigger to show in this chat')
 
 
-def show_recent_edits(bot, update):
+async def show_recent_edits(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.date < INIT_TIMESTAMP:
         return
     result = db.select_edited_message(update.message.chat_id, 3)
@@ -198,12 +202,12 @@ def show_recent_edits(bot, update):
             else:
                 text = '<b>[ORI]</b>'
             lines.append(text + '%s %s(%s): %s' % tuple(item[:4]))
-        update.message.reply_text('\n'.join(lines), parse_mode='HTML')
+        await update.message.reply_text('\n'.join(lines), parse_mode='HTML')
     else:
-        update.message.reply_text('No edits!')
+        await update.message.reply_text('No edits!')
 
 
-def show_help(bot, update):
+async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.date < INIT_TIMESTAMP:
         return
     if update.message.from_user.id in BAN_IDS:
@@ -222,10 +226,10 @@ def show_help(bot, update):
            '/merge trigger1=>trigger2 //move all text of trigger1 to trigger2 \n' \
            '/clear <trigger> \n' \
            '/triggers //list all triggers in this chat'
-    update.message.reply_text(text)
+    await update.message.reply_text(text)
 
 
-def search(bot, update):
+async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.date < INIT_TIMESTAMP:
         return
     try:
@@ -241,19 +245,19 @@ def search(bot, update):
             if len(text[3].split('\n')) > 3:  # limit result display to 3 lines
                 text[3] = '\n'.join(text[3].split('\n')[0:3] + ['...'])
             lines.append('%s %s(%s): %s' % tuple(text))
-        update.message.reply_text('\n'.join(lines))
+        await update.message.reply_text('\n'.join(lines))
     else:
-        update.message.reply_text('Not found!')
+        await update.message.reply_text('Not found!')
 
 
-def stats(bot, update):
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.date < INIT_TIMESTAMP:
         return
     if update.message.from_user.id in BAN_IDS:
         return
     result = db.query_chat_stats(update.message.chat_id)
     if not result:
-        update.message.reply_text('No stats to show')
+        await update.message.reply_text('No stats to show')
     else:
         lines = []
         for user in result:
@@ -263,7 +267,7 @@ def stats(bot, update):
         content = '\n'.join(lines)
 
         if len(content) <= 4000:
-            update.message.reply_text(content, quote=False)
+            await update.message.reply_text(content, quote=False)
         else:  # message too long, need to split
             i = 0
             it = 0
@@ -272,18 +276,18 @@ def stats(bot, update):
                 if it >= 20: break
                 for j in range(min(4000, len(content) - i - 1), 0, -1):
                     if content[i + j] == '\n' or i + j == len(content) - 1:
-                        update.message.reply_text(content[i:i + j + 1], quote=False)
+                        await update.message.reply_text(content[i:i + j + 1], quote=False)
                         i = i + j + 1
                         break
 
 
-def echo(bot, update):
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.date < INIT_TIMESTAMP:
         return
     if update.message.from_user.id in BAN_IDS:
         return
     try:
-        update.message.reply_text(update.message.text.split(' ', 1)[1])
+        await update.message.reply_text(update.message.text.split(' ', 1)[1])
     except IndexError:
         pass
 
@@ -310,26 +314,26 @@ def main():
     logging.basicConfig(level=config['debug_level'])
     update_trigger_list()
 
-    updater = Updater(token=config['bot_token'])
-    updater.dispatcher.add_handler(MessageHandler(Filters.all, process_chat_message, edited_updates=True), group=-1)
+    application = Application.builder().token(config['bot_token']).build()
+    application.add_handler(MessageHandler(filters.ALL, process_chat_message), group=-1)
     # text logger & counter & user info update & recent edits
 
-    updater.dispatcher.add_handler(CommandHandler('add', add))
-    updater.dispatcher.add_handler(CommandHandler('del', delete))
-    updater.dispatcher.add_handler(CommandHandler('list', list_text))
-    updater.dispatcher.add_handler(CommandHandler('edits', show_recent_edits))
-    updater.dispatcher.add_handler(CommandHandler('search', search))
-    updater.dispatcher.add_handler(CommandHandler('stats', stats))
-    updater.dispatcher.add_handler(CommandHandler('echo', echo))
-    updater.dispatcher.add_handler(CommandHandler('help', show_help))
-    updater.dispatcher.add_handler(CommandHandler('triggers', show_all_triggers))
-    updater.dispatcher.add_handler(CommandHandler('merge', merge))
-    updater.dispatcher.add_handler(CommandHandler('clear', clear))
+    application.add_handler(CommandHandler('add', add))
+    application.add_handler(CommandHandler('del', delete))
+    application.add_handler(CommandHandler('list', list_text))
+    application.add_handler(CommandHandler('edits', show_recent_edits))
+    application.add_handler(CommandHandler('search', search))
+    application.add_handler(CommandHandler('stats', stats))
+    application.add_handler(CommandHandler('echo', echo))
+    application.add_handler(CommandHandler('help', show_help))
+    application.add_handler(CommandHandler('triggers', show_all_triggers))
+    application.add_handler(CommandHandler('merge', merge))
+    application.add_handler(CommandHandler('clear', clear))
 
-    updater.dispatcher.add_handler(MessageHandler(Filters.text, process_trigger))
+    application.add_handler(MessageHandler(filters.TEXT, process_trigger))
     # process text triggers
 
-    updater.start_polling()
+    application.run_polling()
 
 
 if __name__ == '__main__':

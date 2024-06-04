@@ -138,8 +138,8 @@ def update_count(user_id, chat_id):
 def query_chat_stats(chat_id):
     # return all user's fn,ln,uid,count for a chat
     result = connection.execute(
-        'SELECT first_name,last_name,user_id,count FROM userinfo WHERE chat_id=? ORDER BY count DESC',
-        (chat_id,))
+            'SELECT first_name,last_name,user_id,count FROM userinfo WHERE chat_id=? ORDER BY count DESC',
+            (chat_id,))
     return result.fetchall()
 
 
@@ -159,9 +159,9 @@ def search_text(keywords, chat_id, limit=5):
     matched_ids = [r[0] for r in reduce(lambda x, y: set(x) & set(y), query_result)]
     for uid in matched_ids:
         cursor = connection.execute(
-            'SELECT userinfo.first_name,userinfo.last_name,chats.time,chats.text FROM chats '
-            'LEFT JOIN userinfo ON chats.user_id=userinfo.user_id AND chats.chat_id=userinfo.chat_id '
-            'WHERE chats.update_id=? AND chats.chat_id=? ORDER BY chats.time DESC', (uid, chat_id))
+                'SELECT userinfo.first_name,userinfo.last_name,chats.time,chats.text FROM chats '
+                'LEFT JOIN userinfo ON chats.user_id=userinfo.user_id AND chats.chat_id=userinfo.chat_id '
+                'WHERE chats.update_id=? AND chats.chat_id=? ORDER BY chats.time DESC', (uid, chat_id))
         result.extend(cursor.fetchall())
         if len(result) >= limit:
             break
@@ -176,8 +176,8 @@ def select_edited_message(chat_id, limit=3):
     edited_message_ids = list(set([r[0] for r in cursor.fetchall()]))
     for mid in edited_message_ids:
         cursor = connection.execute(
-            'SELECT userinfo.first_name,userinfo.last_name,chats.time,chats.text,chats.edited FROM chats '
-            'LEFT JOIN userinfo ON chats.user_id=userinfo.user_id AND chats.chat_id=userinfo.chat_id '
-            'WHERE chats.message_id=? AND chats.chat_id=? ORDER BY chats.time', (mid, chat_id))
+                'SELECT userinfo.first_name,userinfo.last_name,chats.time,chats.text,chats.edited FROM chats '
+                'LEFT JOIN userinfo ON chats.user_id=userinfo.user_id AND chats.chat_id=userinfo.chat_id '
+                'WHERE chats.message_id=? AND chats.chat_id=? ORDER BY chats.time', (mid, chat_id))
         result.extend(cursor.fetchall())
     return result
